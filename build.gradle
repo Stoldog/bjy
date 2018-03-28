@@ -1,0 +1,43 @@
+group 'com.hzy'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'java'
+apply plugin: 'idea'
+
+sourceCompatibility = 1.8
+archivesBaseName = "bjy"
+def today = new Date().format('yyyy-MM-dd HH:mm:ss')
+version = '3.1'
+[compileJava, javadoc, compileTestJava]*.options*.encoding = 'UTF-8'
+ext{
+    springframeworkVersion = '3.0.5.RELEASE'
+}
+repositories {
+    maven {
+        url "http://maven.aliyun.com/nexus/content/groups/public/"
+    }
+    /*maven {
+        url "http://maven.eduhzy.net:1560/nexus/content/groups/public"
+    }*/
+}
+
+dependencies {
+    // https://mvnrepository.com/artifact/com.alibaba/fastjson
+    compile group: 'com.alibaba', name: 'fastjson', version: '1.2.5'
+
+    compile (
+
+            'org.aspectj:aspectjrt:1.8.9',
+            'org.aspectj:aspectjweaver:1.8.9',
+
+            'commons-httpclient:commons-httpclient:3.1',
+
+            "org.springframework:spring-core:$springframeworkVersion",
+            "org.springframework:spring-beans:$springframeworkVersion",
+            "org.springframework:spring-aop:$springframeworkVersion",
+            "org.springframework:spring-aspects:$springframeworkVersion"
+    )
+
+    testCompile group: 'junit', name: 'junit', version: '4.+'
+    testCompile "org.springframework:spring-test:$springframeworkVersion"
+}
