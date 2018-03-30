@@ -6,19 +6,26 @@ import base.type.ReturnCode;
 import com.alibaba.fastjson.JSON;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.util.ResourceUtils;
 import utils.HttpClientUtils;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.security.MessageDigest;
 import java.util.*;
 /**
  * Created by EduHzy-019 on 2018-03-29.
  *  调用百家云API的基本Service
  */
-public abstract class BaseService {
-    public static final String BJY_API_HOST = "https://api.baijiayun.com/";
+public abstract class AbstractBaseApiService {
+    private String apiHost;
+    private int partnerId;
+    private String secretKey;
 
     //日志
-    private static Log logger = LogFactory.getLog(BaseService.class);
+    private static Log logger = LogFactory.getLog(AbstractBaseApiService.class);
 
     /**
      * 统一调用百家云的相关api（params里面需要包含公共参数）
@@ -33,24 +40,34 @@ public abstract class BaseService {
             throw new Exception("调用API的参数错误！请检查参数！");
         }
         CommonReturn commonReturn = new CommonReturn();
-        int partnerId = 54124857;
-        String secretKey = "e142b83823811ac3e4c714fcc8f4de45";
-        //设置公共参数
+        //设置公共参数 partner_id  timestamp sign
         params.put("partner_id",partnerId);
         long time = new Date().getTime()/1000;
         params.put("timestamp",(int)time);
+        //判断是否传入了partner_key 和 sign 如果不小心传入需删除
+        if(params.get("partner_key")!=null || params.get("sign")!=null){
+            params.remove("sign");
+            params.remove("partner_key");
+        }
         //计算sign
         String sign = getSign(getPartnerKey(partnerId,secretKey,0),params);
         params.put("sign",sign);
+
+        String jsonStr = "";
+        String openApiURL = apiHost+apiUrl;
+        if(apiUrl.startsWith(apiHost)){
+            openApiURL = apiUrl;
+        }
         if(HttpMethod.GET == method){
-
+            jsonStr = HttpClientUtils.doGetSSL(openApiURL,params);
         }else if(HttpMethod.POST == method){
-            String jsonStr = HttpClientUtils.doPostSSL(BJY_API_HOST+apiUrl,params);
-            if(jsonStr != "" && jsonStr != null){
-                commonReturn = JSON.parseObject(jsonStr,CommonReturn.class);
-            }
+            jsonStr = HttpClientUtils.doPostSSL(openApiURL,params);
         }else {
-
+            commonReturn.setCode(-1);
+            commonReturn.setMsg("传入的方法错误！");
+        }
+        if(jsonStr != "" && jsonStr != null){
+            commonReturn = JSON.parseObject(jsonStr,CommonReturn.class);
         }
         return commonReturn;
     }
@@ -64,7 +81,7 @@ public abstract class BaseService {
      */
     public String getPartnerKey(int partner_id,String secret_key,int regenerate){
         //请求路径
-        StringBuilder sendUrl = new StringBuilder(BJY_API_HOST);
+        StringBuilder sendUrl = new StringBuilder(apiHost);
         sendUrl.append("openapi/partner/createkey");
         //提交的参数
         Map<String,Object> params = new LinkedHashMap<>();
@@ -94,6 +111,7 @@ public abstract class BaseService {
      *      3.将以上拼好的串后面再拼上 &partner_key=<partner_key> ，其中 <partner_key> 替换成具体值
      *      4.对以上拼好的串算一个32位md5值（小写），即得到了签名
      *      5.partner_key总是拼在字符串最后面，并不参与key的排序
+     *      6.文件不参与签名计算
      *
      * @param params 调用API请求所需要的参数
      * @return
@@ -104,6 +122,10 @@ public abstract class BaseService {
         //参数集合
         List<String> keyList = new ArrayList<>();
         for (String s : params.keySet()) {
+            //文件不参与签名计算
+            if(s.equals("attachment")){
+                continue;
+            }
             keyList.add(s);
         }
         //默认进行ASCII码排序（从小至大）
@@ -138,6 +160,25 @@ public abstract class BaseService {
         catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * 获取配置文件
+     * @throws IOException
+     */
+    protected void readProperties() throws IOException {
+        Properties properties = new Properties();
+        File file = ResourceUtils.getFile(ResourceUtils.CLASSPATH_URL_PREFIX+ "bjy_cfg.properties");
+        if(file == null){
+            throw new RuntimeException("未找到bjy_cfg.properties，请在classpath下设置相关配置及参数");
+        }
+        FileInputStream fileInputStream = new FileInputStream(file);
+        InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream,"utf-8");
+        properties.load(inputStreamReader);
+        //初始化调用百家云API必要的参数
+        this.apiHost = properties.getProperty("bjy.base.host");
+        this.partnerId = Integer.parseInt(properties.getProperty("bjy.base.partner.id"));
+        this.secretKey = properties.getProperty("bjy.base.secret.key");
     }
 
 }
